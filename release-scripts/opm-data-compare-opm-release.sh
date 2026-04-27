@@ -37,8 +37,18 @@ fi
 declare -A flows versions view slide projection cases
 flows[flow1]=$FLOW1
 flows[flow2]=$FLOW2
-versions[flow1]="$($FLOW1 --version | cut -c6-)"
-versions[flow2]="$($FLOW2 --version | cut -c6-)"
+if grep -q ":" <<< $FLOW1
+then
+  versions[flow1]="$(docker run $FLOW1 flow --version | cut -c6-)"
+else
+  versions[flow1]="$($FLOW1 --version | cut -c6-)"
+fi
+if grep -q ":" <<< $FLOW2
+then
+  versions[flow2]="docker run $FLOW2 flow --version | cut -c6-)"
+else
+  versions[flow2]="$($FLOW2 --version | cut -c6-)"
+fi
 view[1]="Side (i=1)"
 view[2]="Front (j=1)"
 view[3]="Top (k=1)"
@@ -75,7 +85,15 @@ for ((x = 1; x <= m; x++)); do
     fi
     n=1
     for flow in flow1 flow2; do
-        mpirun -np $CPUS ${flows[$flow]} $deck --output-dir=$case/FLOW$n --parsing-strictness=low --check-satfunc-consistency=0
+        if grep -q ":" <<< ${flows[$flow]}
+        then
+          mkdir -p $case/FLOW$n
+          DECK_DIR=$(dirname ${deck})
+          DECK=$(basename ${deck})
+          docker run -v ${PWD}/$case/FLOW$n:/shared_host -v ${DECK_DIR}:/deck ${flows[$flow]} mpirun -np $CPUS flow /deck/$DECK --output-dir=/shared_host --parsing-strictness=low --check-satfunc-consistency=0
+        else
+          mpirun -np $CPUS ${flows[$flow]} $deck --output-dir=$case/FLOW$n --parsing-strictness=low --check-satfunc-consistency=0
+        fi
         n=$((n + 1))
     done
     cd $case
